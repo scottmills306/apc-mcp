@@ -1,10 +1,10 @@
 # apc-mcp — Audio Plugin Coder MCP Server
 
-[![npm](https://img.shields.io/npm/v/%40scottmills306%2Fapc-mcp)](https://www.npmjs.com/package/@scottmills306/apc-mcp)
 [![CI](https://github.com/scottmills306/apc-mcp/actions/workflows/publish.yml/badge.svg)](https://github.com/scottmills306/apc-mcp/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/scottmills306/apc-mcp)](https://github.com/scottmills306/apc-mcp/releases)
 
-**apc-mcp** is a [Model Context Protocol](https://modelcontextprotocol.io) server that brings audio plugin development workflows into any MCP-compatible client (Claude Code, OpenCode, VS Code with MCP, etc.).
+**apc-mcp** is a [Model Context Protocol](https://modelcontextprotocol.io) server that brings audio plugin development workflows into any MCP client — Claude Code, OpenCode, VS Code with MCP, Continue.dev, etc.
 
 It wraps **CMake**, **ctest**, **clang-format**, **pluginval**, and **clap-validator** into a clean tool interface for building, testing, linting, validating, and scaffolding JUCE, CLAP, VST3, and ARA plugin projects.
 
@@ -22,6 +22,24 @@ It wraps **CMake**, **ctest**, **clang-format**, **pluginval**, and **clap-valid
 
 ## Quick Start
 
+### One-liner install
+
+Add to your MCP config — no npm, no clone, no setup:
+
+```json
+{
+  "mcp": {
+    "apc-mcp": {
+      "type": "local",
+      "command": ["npx", "-y", "github:scottmills306/apc-mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+`npx` handles fetching and caching automatically. Updates when you restart your MCP client.
+
 ### Prerequisites
 
 - **Node.js 18+**
@@ -30,29 +48,6 @@ It wraps **CMake**, **ctest**, **clang-format**, **pluginval**, and **clap-valid
 - **pluginval** (optional) — for VST3 validation
 - **clap-validator** (optional) — for CLAP validation
 - A JUCE/CLAP/VST3 audio plugin project with a `plugins/` directory
-
-### Installation
-
-```json
-{
-  "mcp": {
-    "apc-mcp": {
-      "type": "local",
-      "command": ["npx", "-y", "@scottmills306/apc-mcp"],
-      "enabled": true
-    }
-  }
-}
-```
-
-Or clone locally:
-
-```sh
-git clone https://github.com/scottmills306/apc-mcp.git
-cd apc-mcp
-npm install
-# then point config to: node /path/to/apc-mcp/index.js
-```
 
 ## Project Config
 
@@ -163,6 +158,7 @@ Tests use Node's built-in `node:test` runner — zero test dependencies.
 
 ## Why apc-mcp?
 
+- **One command install** — `npx github:scottmills306/apc-mcp`, nothing else
 - **Project-agnostic** — works with any audio plugin repo, no hardcoded paths
 - **Configurable** — drop `apc-mcp.json` for per-project defaults, or pass everything explicitly
 - **Structured output** — tools return parsed error/warning counts, pass/fail summaries, and optional JSON
@@ -170,16 +166,6 @@ Tests use Node's built-in `node:test` runner — zero test dependencies.
 - **Validation** — runs pluginval and clap-validator on your built binaries
 - **Leverages your existing toolchain** — wraps cmake, ctest, clang-format instead of reinventing them
 - **MIT licensed**
-
-## Publishing to npm
-
-The CI/CD pipeline publishes to npm automatically when a `v*` tag is pushed:
-
-```sh
-git tag v1.0.1 && git push origin v1.0.1
-```
-
-Requires `NPM_TOKEN` secret on the repository.
 
 ## License
 

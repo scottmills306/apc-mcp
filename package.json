@@ -1,6 +1,6 @@
 {
   "name": "@scottmills306/apc-mcp",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "description": "MCP server for audio plugin development — CMake build, test, lint, and project management for JUCE, CLAP, VST3, and ARA plugin projects",
   "type": "module",
   "bin": {
