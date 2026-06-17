@@ -299,7 +299,7 @@ function checkPluginPath(projectPath, pluginDir) {
 // ─── Server ─────────────────────────────────────────────────────────
 const server = new McpServer({
   name: 'apc-mcp',
-  version: '1.4.0',
+  version: '1.4.1',
 });
 
 // ─── audio_plugin_build ────────────────────────────────────────────
