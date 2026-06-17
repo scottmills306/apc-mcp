@@ -29,7 +29,7 @@ It wraps the tools you already use — **CMake**, **ctest**, **clang-format** �
 
 ### Installation
 
-Run it directly with `npx` — no install needed:
+#### Option 1: npm (once published)
 
 ```json
 {
@@ -43,13 +43,35 @@ Run it directly with `npx` — no install needed:
 }
 ```
 
-Or install globally:
+#### Option 2: Clone and run locally
 
 ```sh
-npm install -g @scottmills306/apc-mcp
+git clone https://github.com/scottmills306/apc-mcp.git
+cd apc-mcp
+npm install
 ```
 
 Then add to your MCP config:
+
+```json
+{
+  "mcp": {
+    "apc-mcp": {
+      "type": "local",
+      "command": ["node", "/path/to/apc-mcp/index.js"],
+      "enabled": true
+    }
+  }
+}
+```
+
+#### Option 3: Install from GitHub (requires Node 20+)
+
+```sh
+npm install -g github:scottmills306/apc-mcp
+```
+
+Then add to config:
 
 ```json
 {
