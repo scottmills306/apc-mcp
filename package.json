@@ -7,8 +7,12 @@
     "apc-mcp": "./index.js"
   },
   "files": [
-    "index.js"
+    "index.js",
+    "templates/"
   ],
+  "scripts": {
+    "test": "node --test tests/server.test.js"
+  },
   "engines": {
     "node": ">=18"
   },

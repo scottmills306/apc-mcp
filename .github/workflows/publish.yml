@@ -17,12 +17,21 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Verify MCP server starts and lists tools
+      - name: Run test suite
+        run: npm test
+      - name: Smoke test — all tools register
         run: |
-          echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | timeout 5 node index.js | grep -q 'audio_plugin_build'
-          echo 'tools/list OK'
-          echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"audio_plugin_plugins","arguments":{"projectPath":"/dev/null"}}}' | timeout 5 node index.js | grep -q 'No plugins'
-          echo 'tools/call OK'
+          echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | timeout 5 node index.js | python3 -c "
+          import sys, json
+          data = json.loads(sys.stdin.read())
+          names = [t['name'] for t in data['result']['tools']]
+          expected = ['audio_plugin_build','audio_plugin_configure','audio_plugin_create','audio_plugin_lint','audio_plugin_plugins','audio_plugin_test','audio_plugin_validate']
+          missing = [n for n in expected if n not in names]
+          if missing:
+            print(f'FAIL: missing tools: {missing}')
+            sys.exit(1)
+          print(f'OK: {len(names)} tools registered')
+          "
 
   publish:
     needs: test
