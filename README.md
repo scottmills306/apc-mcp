@@ -164,6 +164,19 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node index.js
 - **Leverages your existing toolchain** — wraps cmake, ctest, clang-format rather than reinventing them
 - **No ACP backend needed** — unlike earlier designs, this runs standalone with zero external dependencies beyond Node.js and your system build tools
 
+## Publishing to npm
+
+The CI/CD pipeline publishes to npm automatically when a `v*` tag is pushed. To enable this:
+
+1. Generate an npm automation token at [npmjs.com/settings/tokens](https://www.npmjs.com/settings/tokens) (requires npm account)
+2. Add it as a repository secret on GitHub:
+   ```
+   gh secret set NPM_TOKEN --repo scottmills306/apc-mcp
+   ```
+3. Push a tag: `git tag v1.0.1 && git push origin v1.0.1`
+
+Once published, users can run directly with `npx @scottmills306/apc-mcp`.
+
 ## License
 
 MIT © 2026 Scott Mills
