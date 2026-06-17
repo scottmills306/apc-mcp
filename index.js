@@ -32,6 +32,10 @@ const SAFE_PLUGIN_NAME = /^[a-zA-Z0-9_-]+$/;
 const SAFE_VENDOR = /^[a-zA-Z0-9_.-]+$/;
 // Test name regex: printable ASCII only
 const SAFE_REGEX = /^[\x20-\x7E]+$/;
+// Description: printable ASCII
+const SAFE_DESCRIPTION = /^[\x20-\x7E]+$/;
+// JUCE format list: semicolon-separated format names
+const SAFE_FORMATS = /^[a-zA-Z0-9_;-]+$/;
 // Project path: block shell metacharacters
 const SAFE_PATH = /^[a-zA-Z0-9_ \/.\-:@~]+$/;
 
@@ -593,9 +597,9 @@ server.tool(
       .describe('Plugin format. "clap" generates a standalone CLAP plugin. "juce" generates a JUCE AudioProcessor.'),
     vendor: z.string().regex(SAFE_VENDOR).default('apc-mcp')
       .describe('Vendor/company name embedded in plugin metadata.'),
-    description: z.string().default('An audio plugin')
+    description: z.string().regex(SAFE_DESCRIPTION).default('An audio plugin')
       .describe('Short description for plugin metadata.'),
-    formats: z.string().optional()
+    formats: z.string().regex(SAFE_FORMATS).optional()
       .describe('JUCE plugin formats override. Only for juce/vst3/ara types. Default: "VST3;LV2;Standalone".'),
   },
   async (params) => {
