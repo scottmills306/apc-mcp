@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0] — 2026-06-16
+
+### UX improvements
+- **Smart project discovery**: walks up parent directories looking for `apc-mcp.json` or `CMakeLists.txt`. Run from any subdirectory in your project.
+- **Prerequisite checking**: when cmake/clang-format/pluginval/clap-validator are missing, the tool tells you exactly how to install them instead of throwing a cryptic error.
+- **Better error messages**: `tryRun` distinguishes "command not found" from "command failed" and gives actionable instructions.
+- **Safe file finding**: lint uses `find -print0 | xargs -0` to handle filenames with spaces.
+- **Richer tool descriptions**: every parameter has a detailed description so the LLM understands what it does without guessing.
+
+### Changed
+- Server version bumped to 1.3.0
+
 ## [1.2.0] — 2026-06-16
 
 ### Added

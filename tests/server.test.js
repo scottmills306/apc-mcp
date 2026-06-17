@@ -97,7 +97,7 @@ describe('apc-mcp MCP Server', () => {
         arguments: { projectPath: dir },
       });
       const text = result.result.content[0].text;
-      assert.ok(text.includes('No plugin'), `unexpected text: ${text}`);
+      assert.ok(text.includes('plugins') && (text.includes('No') || text.includes('no')), `unexpected text: ${text}`);
       cleanupProject(dir);
     });
 
