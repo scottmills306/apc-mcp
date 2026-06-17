@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 80" fill="none">
+  <rect width="520" height="80" rx="12" fill="#1a1a2e"/>
+  <text x="40" y="42" font-family="SF Mono,Menlo,Consolas,monospace" font-size="14" fill="#7c7c9a">MCP</text>
+  <text x="40" y="62" font-family="SF Mono,Menlo,Consolas,monospace" font-size="10" fill="#5c5c7a">v1</text>
+  <text x="80" y="48" font-family="Inter,-apple-system,sans-serif" font-size="28" font-weight="700" fill="#e0e0f0">apc-mcp</text>
+  <text x="80" y="66" font-family="Inter,-apple-system,sans-serif" font-size="12" fill="#8888aa">Audio Plugin Coder · Model Context Protocol</text>
+  <g transform="translate(440, 18)" stroke="#4a6cf7" stroke-width="2" stroke-linecap="round">
+    <path d="M0 20 Q6 8 12 20 Q18 32 24 20 Q30 8 36 20" opacity="0.6"/>
+    <path d="M3 24 Q9 12 15 24 Q21 36 27 24 Q33 12 39 24" opacity="0.4"/>
+  </g>
+</svg>

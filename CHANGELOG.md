@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0] — 2026-06-16
+
+### Added
+- **Logo**: SVG banner in README with dark/light mode support
+- **.editorconfig**: Standardized editor settings
+- **Issue templates**: Bug report + feature request templates in `.github/ISSUE_TEMPLATE/`
+- **Dependabot**: Weekly automated dependency updates for npm + GitHub Actions
+- **CodeQL**: Security analysis workflow
+- **SECURITY.md**: Vulnerability reporting policy
+- **CI matrix**: Tests run on Node 18, 20, and 22 in parallel
+- **Lint step**: `node --check index.js` in CI to catch syntax errors
+- **FAQ / Troubleshooting** section in README
+- **Semantic versioning** policy documented
+
+### Changed
+- README restructured with banner, badges, nav links, and cleaner tool docs
+- CI workflow renamed to "CI" (was "CI / Publish"), publish step uses `continue-on-error`
+- package.json: added `lint` script
+
 ## [1.1.1] — 2026-06-16
 
 ### Changed

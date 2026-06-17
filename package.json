@@ -1,6 +1,6 @@
 {
   "name": "@scottmills306/apc-mcp",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "MCP server for audio plugin development — CMake build, test, lint, and project management for JUCE, CLAP, VST3, and ARA plugin projects",
   "type": "module",
   "bin": {
@@ -11,7 +11,8 @@
     "templates/"
   ],
   "scripts": {
-    "test": "node --test tests/server.test.js"
+    "test": "node --test tests/server.test.js",
+    "lint": "node --check index.js"
   },
   "engines": {
     "node": ">=18"

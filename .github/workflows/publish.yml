@@ -1,4 +1,4 @@
-name: CI / Publish
+name: CI
 
 on:
   push:
@@ -9,17 +9,22 @@ on:
 
 jobs:
   test:
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
-      - name: Run test suite
+      - name: Lint
+        run: node --check index.js
+      - name: Test
         run: npm test
-      - name: Smoke test — all tools register
+      - name: Smoke test — all 7 tools register
         run: |
           echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | timeout 5 node index.js | python3 -c "
           import sys, json
@@ -49,5 +54,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm publish --provenance --access public
+        continue-on-error: true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
