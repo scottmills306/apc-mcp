@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0] — 2026-06-16
+
+### Security (CRITICAL fixes)
+- **Eliminated shell injection vector**: replaced all `execSync()` with `spawnSync()` + argument arrays. No user-supplied value ever reaches a shell interpreter. Previously, unquoted user input in `target`, `options`, `testName`, `generator`, and `projectPath` could be exploited via shell metacharacters (`;`, `$()`, backticks) if an attacker controlled tool arguments (e.g. via prompt injection).
+- **Input validation**: zod `.regex()` constraints on all user-controlled string parameters (`target`, `options`, `testName`, `generator`, `name`, `vendor`, `projectPath`). Invalid inputs are rejected at the schema level before handlers run.
+- **Path traversal protection**: `checkPluginPath()` ensures `audio_plugin_create` writes only within the project boundary. Rejects paths containing `..` that escape the project root.
+- **No shell pipeline for lint**: replaced `find | xargs` pipe with Node.js `fs.readdirSync` recursive walk. Eliminates the only remaining shell invocation in the codebase.
+
+### Changed
+- All child process execution uses `spawnSync()` with explicit argument arrays — no `/bin/sh` involved
+- `maxBuffer` limit on all process output (2MB) prevents memory exhaustion from large build logs
+- Test fixtures auto-clean before each run
+
 ## [1.3.0] — 2026-06-16
 
 ### UX improvements

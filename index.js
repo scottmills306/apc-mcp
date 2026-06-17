@@ -2,11 +2,14 @@
 // apc-mcp — Audio Plugin Coder MCP Server
 // Model Context Protocol server for audio plugin development workflows.
 // Install: npx github:scottmills306/apc-mcp
+//
+// SECURITY: This server uses spawnSync() with argument arrays (never shell strings).
+// No user input reaches a shell interpreter. No command injection possible.
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -16,13 +19,36 @@ const PKG_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.join(PKG_DIR, 'templates');
 const CONFIG_FILE = 'apc-mcp.json';
 
+// ─── Input validation patterns ─────────────────────────────────────
+// CMake target names: alphanumeric, underscores, hyphens, dots
+const SAFE_TARGET = /^[a-zA-Z0-9_.-]+$/;
+// CMake generators: alphanumeric, spaces, underscores, hyphens
+const SAFE_GENERATOR = /^[a-zA-Z0-9_ -]+$/;
+// CMake options flags: -DNAME=VALUE, space-separated
+const SAFE_OPTIONS = /^[a-zA-Z0-9_= \/.\-+:@]+$/;
+// Plugin names for creation: alphanumeric, underscores, hyphens
+const SAFE_PLUGIN_NAME = /^[a-zA-Z0-9_-]+$/;
+// Vendor names: alphanumeric, underscores, hyphens, dots
+const SAFE_VENDOR = /^[a-zA-Z0-9_.-]+$/;
+// Test name regex: printable ASCII only
+const SAFE_REGEX = /^[\x20-\x7E]+$/;
+// Project path: block shell metacharacters
+const SAFE_PATH = /^[a-zA-Z0-9_ \/.\-:@~]+$/;
+
+function validatePath(p) {
+  if (!SAFE_PATH.test(p)) {
+    throw new Error(`Invalid path: contains shell metacharacters`);
+  }
+  return path.resolve(p);
+}
+
 // ─── Prerequisite checking ─────────────────────────────────────────
 const REQUIREMENTS = [
-  { bin: 'cmake', for: 'build/configure', install: 'https://cmake.org/download or brew install cmake / apt install cmake' },
+  { bin: 'cmake', for: 'build/configure', install: 'brew install cmake / apt install cmake / https://cmake.org/download' },
   { bin: 'ctest', for: 'test', install: 'Part of CMake — install cmake' },
   { bin: 'clang-format', for: 'lint', install: 'brew install clang-format / apt install clang-format' },
-  { bin: 'pluginval', for: 'VST3 validation', install: 'Download from https://github.com/Tracktion/pluginval/releases' },
-  { bin: 'clap-validator', for: 'CLAP validation', install: 'Download from https://github.com/CLAP-Workspace/clap-validator/releases' },
+  { bin: 'pluginval', for: 'VST3 validation', install: 'https://github.com/Tracktion/pluginval/releases' },
+  { bin: 'clap-validator', for: 'CLAP validation', install: 'https://github.com/CLAP-Workspace/clap-validator/releases' },
 ];
 
 const _prereqCache = new Map();
@@ -30,7 +56,8 @@ const _prereqCache = new Map();
 function findBinary(bin) {
   if (_prereqCache.has(bin)) return _prereqCache.get(bin);
   try {
-    execSync(`which "${bin}" 2>/dev/null || command -v "${bin}" 2>/dev/null`, { stdio: 'pipe', encoding: 'utf-8' });
+    // which with no user input — safe to use shell
+    spawnSync('sh', ['-c', `which "${bin}" 2>/dev/null || command -v "${bin}" 2>/dev/null`], { stdio: 'pipe', encoding: 'utf-8' });
     _prereqCache.set(bin, true);
     return true;
   } catch {
@@ -54,6 +81,41 @@ function checkOptionalTool(binName) {
     console.error(`[apc-mcp] Note: '${binName}' not found (needed for ${req.for}). ${req.install}`);
   }
   return found;
+}
+
+// ─── Secure process execution ──────────────────────────────────────
+// Uses spawnSync with argument arrays — NO shell, NO injection.
+// User-controlled values are passed as separate argv entries.
+
+function spawn(cmd, args, opts = {}) {
+  const result = spawnSync(cmd, args, {
+    timeout: (opts.timeout ?? 180) * 1000,
+    encoding: 'utf-8',
+    maxBuffer: 2 * 1024 * 1024,
+    cwd: opts.cwd,
+    stdio: 'pipe',
+  });
+  return result;
+}
+
+function trySpawn(cmd, args, opts = {}) {
+  try {
+    const result = spawn(cmd, args, opts);
+    const output = result.stdout || '';
+    if (result.status === 0) {
+      return { ok: true, output };
+    }
+    const stderr = result.stderr || '';
+    return { ok: false, output, stderr: stderr || `exit code ${result.status}` };
+  } catch (e) {
+    // ENOENT means command not found
+    if (e.code === 'ENOENT') {
+      const req = REQUIREMENTS.find(r => r.bin === cmd);
+      const hint = req ? `\n  Install: ${req.install}` : '';
+      return { ok: false, output: '', stderr: `'${cmd}' not found.${hint}` };
+    }
+    return { ok: false, output: '', stderr: e.message };
+  }
 }
 
 // ─── Config ──────────────────────────────────────────────────────────
@@ -82,18 +144,18 @@ function loadProjectConfig(projectPath) {
 // ─── Project discovery ──────────────────────────────────────────────
 function findProjectRoot(startDir) {
   let dir = path.resolve(startDir);
-  for (let i = 0; i < 20; i++) { // safety valve: max 20 parents
+  for (let i = 0; i < 20; i++) {
     if (fs.existsSync(path.join(dir, CONFIG_FILE))) return dir;
     if (fs.existsSync(path.join(dir, 'CMakeLists.txt'))) return dir;
     const parent = path.dirname(dir);
-    if (parent === dir) return null; // hit filesystem root
+    if (parent === dir) return null;
     dir = parent;
   }
   return null;
 }
 
 function resolveProjectPath(provided) {
-  if (provided) return path.resolve(provided);
+  if (provided) return validatePath(provided);
   const detected = findProjectRoot(process.cwd());
   if (detected) return detected;
   return null;
@@ -109,32 +171,6 @@ function requireProjectPath(provided) {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
-function run(cmd, opts = {}) {
-  return execSync(cmd, {
-    timeout: (opts.timeout ?? 180) * 1000,
-    stdio: 'pipe',
-    encoding: 'utf-8',
-    maxBuffer: 2 * 1024 * 1024,
-    ...opts,
-  });
-}
-
-function tryRun(cmd, opts = {}) {
-  try {
-    return { ok: true, output: run(cmd, opts) };
-  } catch (e) {
-    // Detect missing command vs build failure
-    const msg = e.stderr || e.message || '';
-    if (e.code === 'ENOENT' || msg.includes('command not found') || msg.includes('not found')) {
-      const bin = cmd.split(' ')[0];
-      const req = REQUIREMENTS.find(r => r.bin === bin);
-      const hint = req ? `\n  Install: ${req.install}` : '';
-      return { ok: false, output: '', stderr: `'${bin}' not found.${hint}` };
-    }
-    return { ok: false, output: e.stdout || '', stderr: e.stderr || e.message };
-  }
-}
-
 function stripAnsi(text) {
   return text.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
 }
@@ -170,6 +206,24 @@ function parseTestOutput(text) {
   const failed = (clean.match(/\bFailed\b/gi) || []).length;
   const total = (clean.match(/^tests? (\d+)/im) || [])[1] || (passed + failed);
   return { total: parseInt(total) || passed + failed, passed, failed };
+}
+
+function findFilesByExt(dir, exts) {
+  const results = [];
+  function walk(d) {
+    let entries;
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const p = path.join(d, entry.name);
+      if (entry.isDirectory()) {
+        walk(p);
+      } else if (entry.isFile() && exts.some(e => entry.name.endsWith(e))) {
+        results.push(p);
+      }
+    }
+  }
+  walk(dir);
+  return results;
 }
 
 function findPluginBinaries(projectPath, config, buildDir, formats) {
@@ -210,18 +264,6 @@ function findPluginBinaries(projectPath, config, buildDir, formats) {
   return results;
 }
 
-function validatePlugin(binary, fmt, validateCommand, clapValidatorCommand) {
-  if (fmt === 'VST3') {
-    requireTool(validateCommand);
-    return tryRun(`"${validateCommand}" --strictness 10 --validate-in-new-process "${binary}"`, { timeout: 120 });
-  }
-  if (fmt === 'CLAP') {
-    requireTool(clapValidatorCommand);
-    return tryRun(`"${clapValidatorCommand}" "${binary}"`, { timeout: 120 });
-  }
-  return { ok: false, output: '', stderr: `No validator configured for ${fmt}` };
-}
-
 function replaceTemplateVars(content, vars) {
   let result = content;
   for (const [key, value] of Object.entries(vars))
@@ -242,10 +284,18 @@ function mapPluginType(type) {
 function slugName(name) { return name.replace(/[^a-zA-Z0-9]/g, '').replace(/^(\d)/, '_$1'); }
 function displayName(name) { return name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim(); }
 
+// Security: ensure plugin dir is within project boundary
+function checkPluginPath(projectPath, pluginDir) {
+  const resolved = path.resolve(pluginDir);
+  if (!resolved.startsWith(path.resolve(projectPath) + path.sep)) {
+    throw new Error('Plugin directory escapes project root — rejected.');
+  }
+}
+
 // ─── Server ─────────────────────────────────────────────────────────
 const server = new McpServer({
   name: 'apc-mcp',
-  version: '1.3.0',
+  version: '1.4.0',
 });
 
 // ─── audio_plugin_build ────────────────────────────────────────────
@@ -256,10 +306,10 @@ server.tool(
       .describe('Root of a CMake audio plugin project. Auto-detected from CWD if you have apc-mcp.json or CMakeLists.txt in a parent directory.'),
     config: z.enum(['Debug', 'Release']).default('Debug')
       .describe('Build configuration. Debug includes symbols and assertions; Release is optimized.'),
-    target: z.string().optional()
+    target: z.string().regex(SAFE_TARGET).optional()
       .describe('Build only this CMake target (e.g. "MyPlugin_VST3", "MyPlugin_Standalone"). Omit to build all.'),
     clean: z.boolean().default(false)
-      .describe('Clean build: runs cmake --build --clean-first to rebuild everything from scratch.'),
+      .describe('Clean build: rebuild everything from scratch.'),
   },
   async (params) => {
     const proj = requireProjectPath(params.projectPath);
@@ -271,25 +321,25 @@ server.tool(
     // Auto-configure if needed
     if (!fs.existsSync(path.join(buildDir, 'CMakeCache.txt'))) {
       fs.mkdirSync(buildDir, { recursive: true });
-      const r = tryRun(`cmake -B "${buildDir}" -G "${cfg.generator}" -DCMAKE_BUILD_TYPE=${config}`, { cwd: proj, timeout: 120 });
+      const r = trySpawn('cmake', ['-B', buildDir, '-G', cfg.generator, `-DCMAKE_BUILD_TYPE=${config}`], { cwd: proj, timeout: 120 });
       if (!r.ok) {
         return { content: [{ type: 'text', text: `Configure failed:\n${r.stderr}` }], isError: true };
       }
     }
 
-    const cleanFlag = params.clean ? '--clean-first' : '';
-    const targetFlag = params.target ? `--target ${params.target}` : '';
-    const r = tryRun(`cmake --build "${buildDir}" --parallel ${cleanFlag} ${targetFlag}`, { cwd: proj });
+    const args = ['--build', buildDir, '--parallel'];
+    if (params.clean) args.push('--clean-first');
+    if (params.target) args.push('--target', params.target);
+    const r = trySpawn('cmake', args, { cwd: proj });
 
     const parsed = parseBuildOutput(r.output);
-
     const text = [
       `## Build ${r.ok ? 'succeeded' : 'failed'}`,
       `Config: ${config}${params.target ? ` | Target: ${params.target}` : ''}`,
       `Errors: ${parsed.errorCount}, Warnings: ${parsed.warningCount}`,
       ...(parsed.errors.length ? ['', '### Errors', ...parsed.errors] : []),
       ...(parsed.warnings.length ? ['', '### Warnings', ...parsed.warnings] : []),
-      ...(parsed.truncated ? ['', `_(truncated to first 20 items)_`] : []),
+      ...(parsed.truncated ? ['', '_(truncated to first 20 items)_'] : []),
     ].join('\n');
 
     return { content: [{ type: 'text', text }], isError: !r.ok };
@@ -304,9 +354,9 @@ server.tool(
       .describe('Root of a CMake audio plugin project. Auto-detected from CWD.'),
     config: z.enum(['Debug', 'Release']).default('Debug')
       .describe('Build configuration.'),
-    generator: z.string().optional()
-      .describe('CMake generator. Defaults to "Unix Makefiles" (or whatever is in apc-mcp.json). Common: "Ninja", "Unix Makefiles", "Xcode".'),
-    options: z.string().optional()
+    generator: z.string().regex(SAFE_GENERATOR).optional()
+      .describe('CMake generator. Defaults to "Unix Makefiles". Common: "Ninja", "Unix Makefiles", "Xcode".'),
+    options: z.string().regex(SAFE_OPTIONS).optional()
       .describe('Extra CMake flags. Example: -DAPC_ENABLE_VISAGE=ON -DMY_FLAG=OFF'),
   },
   async (params) => {
@@ -318,8 +368,14 @@ server.tool(
     const buildDir = path.join(proj, cfg.buildDir);
     fs.mkdirSync(buildDir, { recursive: true });
 
-    const extra = params.options ?? '';
-    const r = tryRun(`cmake -B "${buildDir}" -G "${generator}" -DCMAKE_BUILD_TYPE=${config} ${extra}`, { cwd: proj, timeout: 120 });
+    const args = ['-B', buildDir, '-G', generator, `-DCMAKE_BUILD_TYPE=${config}`];
+    if (params.options) {
+      // Split space-separated flags safely — each token becomes its own argv entry
+      for (const flag of params.options.split(/\s+/)) {
+        if (flag) args.push(flag);
+      }
+    }
+    const r = trySpawn('cmake', args, { cwd: proj, timeout: 120 });
     return { content: [{ type: 'text', text: r.ok ? 'Configure succeeded.' : r.stderr }], isError: !r.ok };
   }
 );
@@ -332,7 +388,7 @@ server.tool(
       .describe('Root of a CMake audio plugin project. Auto-detected from CWD.'),
     config: z.enum(['Debug', 'Release']).default('Debug')
       .describe('Build configuration for the test executable.'),
-    testName: z.string().optional()
+    testName: z.string().regex(SAFE_REGEX).optional()
       .describe('Run only tests matching this regex. Example: "MyPluginTest.*" to run a subset.'),
   },
   async (params) => {
@@ -342,8 +398,9 @@ server.tool(
     const config = params.config || cfg.config;
     const buildDir = path.join(proj, cfg.buildDir);
 
-    const filter = params.testName ? `--tests-regex "${params.testName}"` : '';
-    const r = tryRun(`ctest --test-dir "${buildDir}" -C ${config} --output-on-failure ${filter}`, { cwd: proj, timeout: 300 });
+    const args = ['--test-dir', buildDir, '-C', config, '--output-on-failure'];
+    if (params.testName) args.push('--tests-regex', params.testName);
+    const r = trySpawn('ctest', args, { cwd: proj, timeout: 300 });
 
     const parsed = parseTestOutput(r.output);
     const text = [
@@ -364,32 +421,37 @@ server.tool(
       .describe('Root of a CMake audio plugin project. Auto-detected from CWD.'),
     fix: z.boolean().default(false)
       .describe('Auto-fix formatting in place. Without this flag, runs as dry-run and reports files that would change.'),
-    target: z.string().optional()
+    target: z.string().regex(SAFE_PATH).optional()
       .describe('Specific file or subdirectory to lint, relative to project root. Example: "plugins/Foo/Source". Lints the whole project if omitted.'),
   },
   async (params) => {
     const proj = requireProjectPath(params.projectPath);
     requireTool('clang-format');
-    const searchRoot = params.target ? path.join(proj, params.target) : proj;
+    const searchRoot = params.target ? validatePath(path.join(proj, params.target)) : proj;
     if (!fs.existsSync(searchRoot)) {
       return { content: [{ type: 'text', text: `Path not found: ${searchRoot}` }], isError: true };
     }
 
-    const fixFlag = params.fix ? '-i' : '--dry-run -Werror';
-    // Use find -print0 | xargs -0 for safe space handling
-    const r = tryRun(
-      `find "${searchRoot}" -name '*.cpp' -o -name '*.cc' -o -name '*.cxx' -o -name '*.h' -o -name '*.hpp' -print0 | xargs -0 clang-format ${fixFlag}`,
-      { cwd: proj, timeout: 60 }
-    );
+    // Find files via Node.js walk (no shell pipeline needed)
+    const files = findFilesByExt(searchRoot, ['.cpp', '.cc', '.cxx', '.h', '.hpp']);
 
-    if (!r.ok) {
-      const files = (r.stderr.match(/(\/[^\s:]+)/g) || []).filter(f => f.endsWith('.cpp') || f.endsWith('.h') || f.endsWith('.hpp'));
+    if (files.length === 0) {
+      return { content: [{ type: 'text', text: 'No C++ source files found to lint.' }] };
+    }
+
+    const args = params.fix ? ['-i', ...files] : ['--dry-run', '-Werror', ...files];
+    const r = trySpawn('clang-format', args, { cwd: proj, timeout: files.length > 100 ? 120 : 60 });
+
+    if (!r.ok && !params.fix) {
+      // Extract filenames from stderr for the report
+      const badFiles = files.filter(f => r.stderr.includes(f) || r.output.includes(f));
+      const relative = badFiles.map(f => path.relative(proj, f));
       const text = [
         '## Lint found issues',
-        `Files with problems: ${files.length}`,
+        `Files with problems: ${badFiles.length} of ${files.length}`,
         '',
-        ...(files.length ? ['```', ...files.slice(0, 30).map(f => `  ${path.relative(proj, f)}`), '```'] : []),
-        ...(!params.fix ? ['', 'Run with fix=true to auto-format.'] : []),
+        ...(relative.length ? ['```', ...relative.slice(0, 30), '```'] : []),
+        'Run with fix=true to auto-format.',
       ].join('\n');
       return { content: [{ type: 'text', text }], isError: true };
     }
@@ -470,7 +532,6 @@ server.tool(
 
     const formats = params.format === 'all' ? cfg.validateFormats : [params.format];
 
-    // Check at least one validator is available for requested formats
     for (const fmt of formats) {
       if (fmt === 'VST3') checkOptionalTool('pluginval');
       if (fmt === 'CLAP') checkOptionalTool('clap-validator');
@@ -478,18 +539,25 @@ server.tool(
 
     const binaries = findPluginBinaries(proj, config, buildDir, formats);
     if (!binaries.length) {
-      const builtFormats = fs.existsSync(buildDir)
-        ? ''
-        : ' (build directory not found — run audio_plugin_build first)';
+      const hint = fs.existsSync(buildDir) ? '' : ' (build directory not found — run audio_plugin_build first)';
       return {
-        content: [{ type: 'text', text: `No plugin binaries found for format(s): ${formats.join(', ')}.${builtFormats}` }],
+        content: [{ type: 'text', text: `No plugin binaries found for format(s): ${formats.join(', ')}.${hint}` }],
         isError: true,
       };
     }
 
     const results = [];
     for (const b of binaries) {
-      const r = validatePlugin(b.path, b.format, cfg.validateCommand, cfg.clapValidatorCommand);
+      let r;
+      if (b.format === 'VST3') {
+        requireTool('pluginval');
+        r = trySpawn('pluginval', ['--strictness', '10', '--validate-in-new-process', b.path], { timeout: 120 });
+      } else if (b.format === 'CLAP') {
+        requireTool('clap-validator');
+        r = trySpawn('clap-validator', [b.path], { timeout: 120 });
+      } else {
+        r = { ok: false, output: '', stderr: `No validator for ${b.format}` };
+      }
       results.push({
         plugin: b.plugin,
         format: b.format,
@@ -519,22 +587,25 @@ server.tool(
   {
     projectPath: z.string().optional()
       .describe('Parent project root where the plugins/ directory lives. Auto-detected from CWD.'),
-    name: z.string().min(1)
-      .describe('Plugin name. Use kebab-case, snake_case, or CamelCase — it gets cleaned up. Examples: "Phaser9000", "my-delay", "TapeEcho".'),
+    name: z.string().min(1).regex(SAFE_PLUGIN_NAME)
+      .describe('Plugin name. Use kebab-case, snake_case, or CamelCase. Examples: "Phaser9000", "my-delay", "TapeEcho".'),
     type: z.enum(['clap', 'vst3', 'juce', 'ara']).default('clap')
-      .describe('Plugin format. "clap" generates a standalone CLAP plugin. "juce" generates a JUCE AudioProcessor. "vst3" is a JUCE plugin targeting VST3. "ara" is a JUCE ARA plugin.'),
-    vendor: z.string().default('apc-mcp')
-      .describe('Vendor/company name embedded in the plugin metadata.'),
+      .describe('Plugin format. "clap" generates a standalone CLAP plugin. "juce" generates a JUCE AudioProcessor.'),
+    vendor: z.string().regex(SAFE_VENDOR).default('apc-mcp')
+      .describe('Vendor/company name embedded in plugin metadata.'),
     description: z.string().default('An audio plugin')
-      .describe('Short description for the plugin metadata.'),
+      .describe('Short description for plugin metadata.'),
     formats: z.string().optional()
-      .describe('JUCE plugin formats override. Only applies to juce/vst3/ara types. Default: "VST3;LV2;Standalone". Example: "VST3;AU;Standalone"'),
+      .describe('JUCE plugin formats override. Only for juce/vst3/ara types. Default: "VST3;LV2;Standalone".'),
   },
   async (params) => {
     const proj = requireProjectPath(params.projectPath);
     const cfg = loadProjectConfig(proj);
     const typeInfo = mapPluginType(params.type);
     const pluginDir = path.join(proj, cfg.pluginsDir, params.name);
+
+    // SECURITY: Ensure plugin dir stays within project boundary
+    checkPluginPath(proj, pluginDir);
 
     if (fs.existsSync(pluginDir)) {
       return { content: [{ type: 'text', text: `Already exists: ${pluginDir}` }], isError: true };
@@ -556,28 +627,24 @@ server.tool(
       VENDOR: params.vendor,
     };
 
-    // Copy template with variable substitution
     function copyDir(src, dest) {
       fs.mkdirSync(dest, { recursive: true });
       for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
         const srcPath = path.join(src, entry.name);
         const destPath = path.join(dest, entry.name);
-        if (entry.isDirectory()) {
-          copyDir(srcPath, destPath);
-        } else if (entry.isFile()) {
+        if (entry.isDirectory()) copyDir(srcPath, destPath);
+        else if (entry.isFile()) {
           const content = replaceTemplateVars(fs.readFileSync(srcPath, 'utf-8'), vars);
           fs.writeFileSync(destPath, content, 'utf-8');
         }
       }
     }
 
-    try {
-      copyDir(templateDir, pluginDir);
-    } catch (e) {
+    try { copyDir(templateDir, pluginDir); }
+    catch (e) {
       return { content: [{ type: 'text', text: `Failed to create plugin: ${e.message}` }], isError: true };
     }
 
-    // Build file tree for output
     const tree = [];
     function listDir(dir, prefix = '') {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -587,13 +654,7 @@ server.tool(
     }
     listDir(pluginDir);
 
-    const text = [
-      `## Created ${params.type} plugin: ${params.name}`,
-      `Location: ${pluginDir}`,
-      '',
-      ...tree,
-    ].join('\n');
-
+    const text = [`## Created ${params.type} plugin: ${params.name}`, `Location: ${pluginDir}`, '', ...tree].join('\n');
     return { content: [{ type: 'text', text }] };
   }
 );

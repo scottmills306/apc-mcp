@@ -40,9 +40,10 @@ function request(method, params = {}) {
 
 function withProject(name) {
   const dir = path.join(FIXTURE_DIR, name);
+  // Clean any leftover from prior runs
+  fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
   fs.mkdirSync(path.join(dir, 'plugins'), { recursive: true });
-  // Create a minimal CMakeLists.txt
   fs.writeFileSync(path.join(dir, 'CMakeLists.txt'),
     `cmake_minimum_required(VERSION 3.22)\nproject(${name})\n`);
   return dir;
