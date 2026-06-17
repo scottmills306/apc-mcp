@@ -12,7 +12,12 @@
   ],
   "scripts": {
     "test": "node --test tests/server.test.js",
-    "lint": "node --check index.js"
+    "lint": "node --check index.js",
+    "audit": "npm audit && echo '✅ No known vulnerabilities'",
+    "quality": "node --check index.js && npm test",
+    "security": "npm audit --audit-level=high && echo '✅ Security gate passed'",
+    "check": "npm run quality && npm run audit",
+    "ship": "npm run check && git tag v$npm_package_version && git push origin main --tags"
   },
   "engines": {
     "node": ">=18"
