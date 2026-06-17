@@ -1,0 +1,44 @@
+name: CI / Publish
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Verify MCP server starts and lists tools
+        run: |
+          echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | timeout 5 node index.js | grep -q 'audio_plugin_build'
+          echo 'tools/list OK'
+          echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"audio_plugin_plugins","arguments":{"projectPath":"/dev/null"}}}' | timeout 5 node index.js | grep -q 'No plugins'
+          echo 'tools/call OK'
+
+  publish:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

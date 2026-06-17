@@ -1,0 +1,37 @@
+{
+  "name": "@scottmills306/apc-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for audio plugin development — CMake build, test, lint, and project management for JUCE, CLAP, VST3, and ARA plugin projects",
+  "type": "module",
+  "bin": {
+    "apc-mcp": "./index.js"
+  },
+  "files": [
+    "index.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "zod": "^3.24.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/scottmills306/apc-mcp.git"
+  },
+  "homepage": "https://github.com/scottmills306/apc-mcp",
+  "bugs": "https://github.com/scottmills306/apc-mcp/issues",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "audio-plugin",
+    "juce",
+    "clap",
+    "vst3",
+    "cmake",
+    "audio",
+    "dsp",
+    "modelcontextprotocol"
+  ]
+}
