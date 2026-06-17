@@ -275,11 +275,13 @@ function replaceTemplateVars(content, vars) {
   return result;
 }
 
-function mapPluginType(type) {
+function mapPluginType(type, ui) {
+  // JUCE-based types can choose webview or generic UI
+  const isWebView = ui === 'webview';
   switch (type) {
     case 'clap': return { template: 'clap', formats: 'CLAP' };
-    case 'vst3': return { template: 'juce', formats: 'VST3' };
-    case 'juce': return { template: 'juce', formats: 'VST3;LV2;Standalone' };
+    case 'vst3': return { template: isWebView ? 'juce-webview' : 'juce', formats: 'VST3' };
+    case 'juce': return { template: isWebView ? 'juce-webview' : 'juce', formats: 'VST3;LV2;Standalone' };
     case 'ara': return { template: 'juce', formats: 'ARA' };
     default: return { template: 'juce', formats: 'VST3;LV2;Standalone' };
   }
@@ -299,7 +301,7 @@ function checkPluginPath(projectPath, pluginDir) {
 // ─── Server ─────────────────────────────────────────────────────────
 const server = new McpServer({
   name: 'apc-mcp',
-  version: '1.4.1',
+  version: '1.5.0',
 });
 
 // ─── audio_plugin_build ────────────────────────────────────────────
@@ -595,6 +597,8 @@ server.tool(
       .describe('Plugin name. Use kebab-case, snake_case, or CamelCase. Examples: "Phaser9000", "my-delay", "TapeEcho".'),
     type: z.enum(['clap', 'vst3', 'juce', 'ara']).default('clap')
       .describe('Plugin format. "clap" generates a standalone CLAP plugin. "juce" generates a JUCE AudioProcessor.'),
+    ui: z.enum(['generic', 'webview']).default('generic')
+      .describe('UI style for JUCE/VST3 plugins. "generic" (default) uses JUCE\'s GenericAudioProcessorEditor. "webview" uses an HTML/CSS/JS WebView with parameter controls embedded via BinaryData.'),
     vendor: z.string().regex(SAFE_VENDOR).default('apc-mcp')
       .describe('Vendor/company name embedded in plugin metadata.'),
     description: z.string().regex(SAFE_DESCRIPTION).default('An audio plugin')
@@ -605,7 +609,7 @@ server.tool(
   async (params) => {
     const proj = requireProjectPath(params.projectPath);
     const cfg = loadProjectConfig(proj);
-    const typeInfo = mapPluginType(params.type);
+    const typeInfo = mapPluginType(params.type, params.ui);
     const pluginDir = path.join(proj, cfg.pluginsDir, params.name);
 
     // SECURITY: Ensure plugin dir stays within project boundary

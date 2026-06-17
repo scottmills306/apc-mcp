@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0] — 2026-06-17
+
+### Added
+- **WebView UI template**: `audio_plugin_create(name="X", type="juce", ui="webview")` scaffolds a plugin with HTML/CSS/JS UI.
+- **`ui` parameter** on `audio_plugin_create`: `generic` (JUCE's GenericAudioProcessorEditor) or `webview` (WebBrowserComponent with embedded UI).
+- **JS↔C++ bridge**: `WebViewEditor` uses `pageAboutToLoad` URL interception for JS→C++ and `evaluateJavascript()` for C++→JS.
+- **Dark theme UI**: Gain slider, meter visualization, all styled in modern DAW-compatible dark theme.
+
+### Changed
+- `mapPluginType()` now accepts `ui` parameter to select between `juce` and `juce-webview` templates.
+- TODO.md updated with completion status.
+
 ## [1.4.0] — 2026-06-16
 
 ### Security (CRITICAL fixes)
